@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Generated Skill Output Structure",
+  "description": "skill-synthesizerが生成するスキルの出力構造を定義するスキーマ",
+  "type": "object",
+  "required": ["skill_name", "output_dir", "files"],
+  "properties": {
+    "skill_name": {
+      "type": "string",
+      "description": "生成されるスキルの名前（ディレクトリ名）"
+    },
+    "output_dir": {
+      "type": "string",
+      "description": "出力先ディレクトリのパス"
+    },
+    "files": {
+      "type": "object",
+      "required": ["skill_md", "references", "schemas"],
+      "properties": {
+        "skill_md": {
+          "type": "object",
+          "required": ["path", "max_lines", "required_sections"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "const": "SKILL.md"
+            },
+            "max_lines": {
+              "type": "integer",
+              "const": 500
+            },
+            "required_sections": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 6,
+              "description": "必須セクション: frontmatter, WHAT, WHY, HOW, NG/OK table, self-verification"
+            },
+            "frontmatter": {
+              "type": "object",
+              "required": ["name", "description"],
+              "properties": {
+                "name": { "type": "string" },
+                "description": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "description": "100語以内、講座固有トリガーワードを含む"
+                }
+              }
+            }
+          }
+        },
+        "references": {
+          "type": "object",
+          "required": ["concepts", "procedures", "knowledge_graph", "key_quotes", "teaching_patterns"],
+          "properties": {
+            "concepts": {
+              "type": "object",
+              "required": ["path", "content_requirements"],
+              "properties": {
+                "path": { "type": "string", "const": "references/concepts.md" },
+                "content_requirements": {
+                  "type": "object",
+                  "properties": {
+                    "min_concepts": { "type": "integer", "minimum": 5 },
+                    "grouped_by_category": { "type": "boolean", "const": true },
+                    "each_concept_has": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "contains": { "enum": ["definition", "examples", "key_quotes"] }
+                    }
+                  }
+                }
+              }
+            },
+            "procedures": {
+              "type": "object",
+              "required": ["path", "content_requirements"],
+              "properties": {
+                "path": { "type": "string", "const": "references/procedures.md" },
+                "content_requirements": {
+                  "type": "object",
+                  "properties": {
+                    "min_procedures": { "type": "integer", "minimum": 2 },
+                    "each_procedure_has": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "contains": { "enum": ["steps", "outcome", "tags"] }
+                    }
+                  }
+                }
+              }
+            },
+            "knowledge_graph": {
+              "type": "object",
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "const": "references/knowledge-graph.md" }
+              }
+            },
+            "key_quotes": {
+              "type": "object",
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "const": "references/key-quotes.md" }
+              }
+            },
+            "teaching_patterns": {
+              "type": "object",
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "const": "references/teaching-patterns.md" }
+              }
+            }
+          }
+        },
+        "schemas": {
+          "type": "object",
+          "required": ["input", "output"],
+          "properties": {
+            "input": {
+              "type": "object",
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "const": "schemas/input.schema.json" }
+              }
+            },
+            "output": {
+              "type": "object",
+              "required": ["path"],
+              "properties": {
+                "path": { "type": "string", "const": "schemas/output.schema.json" }
+              }
+            }
+          }
+        },
+        "assets": {
+          "type": "object",
+          "properties": {
+            "selected_screenshots": {
+              "type": "object",
+              "properties": {
+                "path": { "type": "string", "const": "assets/selected_screenshots/" },
+                "max_count": { "type": "integer", "const": 20 },
+                "selection_criteria": {
+                  "type": "string",
+                  "const": "visual-indexのvalue_rating=highのフレームのみ"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "skill_md_line_count": {
+          "type": "integer",
+          "maximum": 500
+        },
+        "description_word_count": {
+          "type": "integer",
+          "maximum": 100
+        },
+        "all_references_linked": {
+          "type": "boolean",
+          "const": true
+        },
+        "has_blocker_gates": {
+          "type": "boolean",
+          "const": true
+        },
+        "has_ng_ok_table": {
+          "type": "boolean",
+          "const": true
+        },
+        "has_self_verification": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    }
+  }
+}

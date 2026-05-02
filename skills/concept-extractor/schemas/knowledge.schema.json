@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "knowledge.schema.json",
+  "title": "Chapter Knowledge",
+  "description": "講座の1章分から抽出された構造化知識",
+  "type": "object",
+  "required": ["chapter_id", "chapter_title", "concepts", "tacit_knowledge", "teaching_patterns"],
+  "properties": {
+    "chapter_id": {
+      "type": "string",
+      "pattern": "^[0-9]{2}$",
+      "description": "章番号（ゼロパディング2桁）",
+      "examples": ["03", "10"]
+    },
+    "chapter_title": {
+      "type": "string",
+      "description": "章タイトル"
+    },
+    "concepts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/concept" },
+      "description": "抽出された概念のリスト"
+    },
+    "tacit_knowledge": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tacit_knowledge_item" },
+      "description": "話者の暗黙知リスト"
+    },
+    "teaching_patterns": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/teaching_pattern_item" },
+      "description": "話者の教え方パターンリスト"
+    },
+    "cross_references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cross_reference_item" },
+      "description": "他章への参照リスト"
+    }
+  },
+  "$defs": {
+    "concept": {
+      "type": "object",
+      "required": ["id", "name", "definition", "examples", "key_quotes", "speaker_framing", "prerequisites", "related_concepts"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^c[0-9]{2}-[0-9]{2}$",
+          "description": "概念ID（章番号+連番）",
+          "examples": ["c03-01", "c10-02"]
+        },
+        "name": {
+          "type": "string",
+          "description": "概念の名前（話者が使用した表現）"
+        },
+        "definition": {
+          "type": "string",
+          "description": "概念の定義（1-2文で簡潔に）"
+        },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "話者が挙げた具体例（最低1つ）"
+        },
+        "key_quotes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/key_quote" },
+          "description": "この概念に関する重要発言（原文ママ）"
+        },
+        "speaker_framing": {
+          "type": "string",
+          "description": "話者がこの概念をどう提示しているかのパターン"
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^c[0-9]{2}-[0-9]{2}$"
+          },
+          "description": "この概念を理解するために必要な前提概念のIDリスト"
+        },
+        "related_concepts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^c[0-9]{2}-[0-9]{2}$"
+          },
+          "description": "関連する概念のIDリスト"
+        }
+      }
+    },
+    "key_quote": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "話者の原文ママの発言。要約・意訳は禁止"
+        },
+        "timestamp_approx": {
+          "type": "string",
+          "description": "おおよそのタイムスタンプ（わかる場合）",
+          "examples": ["4:30", "12:15"]
+        }
+      }
+    },
+    "tacit_knowledge_item": {
+      "type": "object",
+      "required": ["id", "insight", "evidence", "implication"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^t[0-9]{2}-[0-9]{2}$",
+          "description": "暗黙知ID（章番号+連番）",
+          "examples": ["t03-01"]
+        },
+        "insight": {
+          "type": "string",
+          "description": "話者が暗黙的に前提としている判断基準・価値観"
+        },
+        "evidence": {
+          "type": "string",
+          "description": "トランスクリプトからの引用（根拠）"
+        },
+        "implication": {
+          "type": "string",
+          "description": "この暗黙知から導かれる実践的な示唆"
+        }
+      }
+    },
+    "teaching_pattern_item": {
+      "type": "object",
+      "required": ["pattern", "description"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "パターン名（kebab-case）",
+          "examples": ["concrete-pain-then-principle", "before-after-comparison"]
+        },
+        "description": {
+          "type": "string",
+          "description": "パターンの説明（ステップを→で接続）"
+        }
+      }
+    },
+    "cross_reference_item": {
+      "type": "object",
+      "required": ["from_chapter", "to_chapter", "relationship"],
+      "properties": {
+        "from_chapter": {
+          "type": "string",
+          "pattern": "^[0-9]{2}$",
+          "description": "参照元の章番号"
+        },
+        "to_chapter": {
+          "type": "string",
+          "pattern": "^[0-9]{2}$",
+          "description": "参照先の章番号"
+        },
+        "relationship": {
+          "type": "string",
+          "description": "参照の内容・関係性の説明"
+        },
+        "related_concepts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^c[0-9]{2}-[0-9]{2}$"
+          },
+          "description": "関連するconcept IDリスト"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "knowledge-graph.schema.json",
+  "title": "Knowledge Graph",
+  "description": "コース全体の概念関係グラフ。全章のknowledge.json処理完了後に生成",
+  "type": "object",
+  "required": ["course_name", "total_concepts", "prerequisite_graph", "concept_hierarchy", "cross_chapter_themes"],
+  "properties": {
+    "course_name": {
+      "type": "string",
+      "description": "コース名"
+    },
+    "total_concepts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "全章の合計概念数。実際のconcept数と一致すること"
+    },
+    "prerequisite_graph": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^c[0-9]{2}-[0-9]{2}$"
+        }
+      },
+      "description": "概念の前提関係マップ。キーがconcept ID、値が前提となるconcept IDの配列",
+      "examples": [
+        { "c09-01": ["c03-01", "c03-03"] }
+      ]
+    },
+    "concept_hierarchy": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/hierarchy_category" },
+      "description": "概念のカテゴリ分類"
+    },
+    "cross_chapter_themes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cross_chapter_theme" },
+      "description": "複数章に横断するテーマ"
+    }
+  },
+  "$defs": {
+    "hierarchy_category": {
+      "type": "object",
+      "required": ["category", "concepts"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "カテゴリ名",
+          "examples": ["AI基礎マインドセット", "プロンプト技術", "コンテンツ制作"]
+        },
+        "concepts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^c[0-9]{2}-[0-9]{2}$"
+          },
+          "description": "このカテゴリに属するconcept IDリスト"
+        }
+      }
+    },
+    "cross_chapter_theme": {
+      "type": "object",
+      "required": ["theme", "chapters"],
+      "properties": {
+        "theme": {
+          "type": "string",
+          "description": "横断テーマ名",
+          "examples": ["AIは鏡", "専門知識の重要性"]
+        },
+        "chapters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{2}$"
+          },
+          "description": "このテーマが登場する章番号リスト"
+        },
+        "description": {
+          "type": "string",
+          "description": "テーマの概要説明"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "visual-index.schema.json",
+  "title": "Visual Index",
+  "description": "チャプター別のスクリーンショット分類・OCR結果インデックス",
+  "type": "object",
+  "required": ["chapter_id", "frames"],
+  "additionalProperties": false,
+  "properties": {
+    "chapter_id": {
+      "type": "string",
+      "description": "チャプターID（例: '03'）",
+      "pattern": "^[0-9]{2,3}$"
+    },
+    "frames": {
+      "type": "array",
+      "description": "チャプター内の全フレーム情報",
+      "items": {
+        "$ref": "#/$defs/frame"
+      }
+    }
+  },
+  "$defs": {
+    "frame": {
+      "type": "object",
+      "required": ["filename", "type", "text_content", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "フレームのファイル名",
+          "pattern": "\\.(jpg|jpeg|png|webp)$"
+        },
+        "type": {
+          "type": "string",
+          "description": "フレーム分類タイプ",
+          "enum": [
+            "title_slide",
+            "content_slide",
+            "browser_screenshot",
+            "terminal_screenshot",
+            "diagram",
+            "talking_head",
+            "transition"
+          ]
+        },
+        "text_content": {
+          "type": "array",
+          "description": "画像内から抽出したテキスト要素",
+          "items": {
+            "type": "string"
+          }
+        },
+        "visual_elements": {
+          "type": "array",
+          "description": "画像内の視覚要素（矢印、ボックス、表など）",
+          "items": {
+            "type": "string",
+            "enum": [
+              "arrow",
+              "box",
+              "four_boxes",
+              "table",
+              "list",
+              "numbered_list",
+              "bullet_list",
+              "flowchart",
+              "hierarchy",
+              "equation_diagram",
+              "pie_chart",
+              "bar_chart",
+              "line_chart",
+              "timeline",
+              "venn_diagram",
+              "matrix",
+              "icon",
+              "logo",
+              "code_block",
+              "url_bar",
+              "tab_bar",
+              "sidebar",
+              "form",
+              "button",
+              "modal",
+              "dropdown",
+              "terminal_prompt",
+              "cursor",
+              "highlight",
+              "annotation",
+              "circle_emphasis",
+              "screenshot_border",
+              "watermark",
+              "subtitle_text",
+              "overlay_text",
+              "speaker_thumbnail",
+              "other"
+            ]
+          }
+        },
+        "keywords": {
+          "type": "array",
+          "description": "検索用キーワード",
+          "items": {
+            "type": "string"
+          }
+        },
+        "is_ui_walkthrough": {
+          "type": "boolean",
+          "description": "UI操作の手順を示す画像かどうか（browser_screenshot/terminal_screenshot向け）"
+        },
+        "confidence": {
+          "type": "string",
+          "description": "分類の信頼度",
+          "enum": ["high", "medium", "low"]
+        },
+        "notes": {
+          "type": "string",
+          "description": "エッジケースや特記事項のメモ"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "content_slide" }
+            }
+          },
+          "then": {
+            "properties": {
+              "text_content": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": { "const": "title_slide" }
+            }
+          },
+          "then": {
+            "properties": {
+              "text_content": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Skill Plan",
+  "description": "course-bundleの抽出結果から生成可能なスキルの計画",
+  "type": "object",
+  "required": ["course_name", "planned_skills", "shared_knowledge", "dependency_graph", "unresolved"],
+  "properties": {
+    "course_name": {
+      "type": "string",
+      "description": "コース名"
+    },
+    "planned_skills": {
+      "type": "array",
+      "description": "生成予定のスキル一覧",
+      "items": {
+        "type": "object",
+        "required": ["skill_name", "type", "purpose", "input", "output", "resources", "procedures", "knowledge_refs", "depends_on", "trigger_words", "rationale"],
+        "properties": {
+          "skill_name": {
+            "type": "string",
+            "description": "スキルのユニークな名前（kebab-case）",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["executable"],
+            "description": "スキルタイプ"
+          },
+          "purpose": {
+            "type": "string",
+            "description": "スキルの目的（1文で）"
+          },
+          "input": {
+            "type": "object",
+            "required": ["description", "required"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "入力の説明"
+              },
+              "required": {
+                "type": "boolean",
+                "description": "入力が必須かどうか"
+              }
+            }
+          },
+          "output": {
+            "type": "object",
+            "required": ["description"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "出力の説明"
+              }
+            }
+          },
+          "resources": {
+            "type": "array",
+            "description": "このスキルが使用するリソース",
+            "items": {
+              "type": "object",
+              "required": ["id", "name", "path", "status"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "リソースID（resources-manifest.jsonのIDと対応）"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "リソース名"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "リソースのパス"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["fetched", "not_fetched", "partial"],
+                  "description": "リソースの取得状態"
+                }
+              }
+            }
+          },
+          "procedures": {
+            "type": "array",
+            "description": "このスキルが実行する手順のID一覧",
+            "items": {
+              "type": "string"
+            }
+          },
+          "knowledge_refs": {
+            "type": "array",
+            "description": "このスキルが参照する概念のID一覧",
+            "items": {
+              "type": "string"
+            }
+          },
+          "manual_ref": {
+            "type": "string",
+            "description": "対応するマニュアルファイルのパス"
+          },
+          "depends_on": {
+            "type": "array",
+            "description": "依存するスキル名の一覧",
+            "items": {
+              "type": "string"
+            }
+          },
+          "trigger_words": {
+            "type": "array",
+            "description": "このスキルの発動トリガーとなるワード（講座固有の具体的なワード）",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "rationale": {
+            "type": "string",
+            "description": "このスキルをexecutableとした根拠"
+          }
+        }
+      }
+    },
+    "shared_knowledge": {
+      "type": "object",
+      "required": ["name", "purpose", "concepts", "ng_ok_patterns", "checklist_items", "manual_refs"],
+      "description": "全スキルから参照される基盤知識",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "共有知識スキルの名前（kebab-case）",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "purpose": {
+          "type": "string",
+          "description": "共有知識の目的"
+        },
+        "concepts": {
+          "type": "array",
+          "description": "基盤概念のID一覧",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ng_ok_patterns": {
+          "type": "array",
+          "description": "NG/OKパターン（講座全体の判断基準）",
+          "items": {
+            "type": "object",
+            "required": ["ng", "ok", "reason"],
+            "properties": {
+              "ng": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "checklist_items": {
+          "type": "array",
+          "description": "品質確認の共通チェックリスト項目",
+          "items": {
+            "type": "string"
+          }
+        },
+        "manual_refs": {
+          "type": "array",
+          "description": "参照マニュアルのパス一覧",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dependency_graph": {
+      "type": "object",
+      "description": "スキル名をキー、依存スキル名の配列を値とする依存関係マップ",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "description": "未解決のリソースや課題",
+      "items": {
+        "type": "object",
+        "required": ["type", "name", "mentioned_in", "action_needed"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["resource_not_fetched", "url_inaccessible", "external_tool_required", "permission_needed"],
+            "description": "未解決項目のタイプ"
+          },
+          "name": {
+            "type": "string",
+            "description": "未解決リソースの名前"
+          },
+          "mentioned_in": {
+            "type": "string",
+            "description": "言及されている章やファイル"
+          },
+          "action_needed": {
+            "type": "string",
+            "description": "解決に必要なアクション"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Course Bundle Manifest",
+  "description": "course-ingestスキルが生成するcourse-bundleのマニフェストファイルのスキーマ",
+  "type": "object",
+  "required": ["course_name", "source_type", "language", "chapters"],
+  "properties": {
+    "course_name": {
+      "type": "string",
+      "description": "講座名"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["utage", "youtube", "local"],
+      "description": "入力ソースの種類"
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "ソースURL（utage/youtubeの場合）"
+    },
+    "language": {
+      "type": "string",
+      "default": "ja",
+      "description": "言語コード（ISO 639-1）"
+    },
+    "speaker": {
+      "type": "string",
+      "description": "講師名"
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "transcript_path", "screenshots_dir", "screenshot_count", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "章ID（ゼロパディング: '00', '01', ...）",
+            "pattern": "^[0-9a-zA-Z_-]+$"
+          },
+          "title": {
+            "type": "string",
+            "description": "章タイトル"
+          },
+          "duration_seconds": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "動画の長さ（秒）。不明な場合はnull"
+          },
+          "transcript_path": {
+            "type": "string",
+            "description": "transcriptファイルへの相対パス（manifest.jsonからの相対）"
+          },
+          "transcript_ts_path": {
+            "type": ["string", "null"],
+            "description": "タイムスタンプ付きtranscript JSONへの相対パス。存在しない場合はnull"
+          },
+          "screenshots_dir": {
+            "type": "string",
+            "description": "スクリーンショットディレクトリへの相対パス"
+          },
+          "screenshot_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "スクリーンショットの枚数"
+          },
+          "manual_path": {
+            "type": ["string", "null"],
+            "description": "生成済みマニュアルへの相対パス。未生成の場合はnull"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["complete", "partial", "pending"],
+            "description": "章の処理状態。complete=全データ揃い、partial=一部欠損、pending=未処理"
+          }
+        }
+      }
+    }
+  }
+}
