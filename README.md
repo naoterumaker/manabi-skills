@@ -66,6 +66,7 @@ extractor   extractor     indexer       マニュアル本文生成）
 | **visual-indexer** | 全スクショを分類・OCR・タグ付け → `visual-index.json` |
 | **skill-planner** | 抽出結果から「何のスキルが作れるか」計画 → `skill-plan.json`（要承認） |
 | **skill-synthesizer** | skill-plan.json から複数のClaude Code Skillを自動生成 |
+| **video-downloader** | yt-dlpラッパー。YouTube/Loom/Vimeo等から動画ダウンロード（manabi-ingestのYouTube処理から呼ばれる）|
 
 ## セットアップ
 
