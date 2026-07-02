@@ -165,6 +165,16 @@ Agent(
 2. visual-index.json のフレーム順序と照合
 3. 画像内容を実際に読んで、トランスクリプトの文脈と照合
 
+### 記事章（content_type: article/hybrid）の場合
+
+記事章ではタイムスタンプ紐付けは不要。**article.md内の画像参照は著者が正しい位置に
+埋め込み済み**なので、手順テキストの直近にある画像参照（`![...](screenshots/img_NNN.png)`）
+をそのまま `screenshot_ref` に使う。これはタイムスタンプ推定より確実。
+
+- 手順の抽出元はarticle.md（原文）。hybrid章では動画transcriptからも抽出し、
+  各手順に `source: "article" | "video"` を付ける
+- 画像なしの手順は `screenshot_ref: null` でよい（記事は文章だけで完結する手順が多い）
+
 ---
 
 ## Step 10: リソース参照の紐付け
@@ -290,7 +300,7 @@ done
 | やらないこと | 理由 | 代わりに使うスキル |
 |-------------|------|-----------------|
 | 概念・定義の抽出 | テキストのみの作業 | concept-extractor |
-| 動画のフレーム切り出し | 前処理 | video-to-frames |
+| 動画のフレーム切り出し | 前処理 | manabi-ingest |
 | スクショの分類・インデックス作成 | 前処理 | visual-indexer |
 | 動画ダウンロード | 前処理 | video-downloader |
 | マニュアル文書の生成 | 後工程 | （別スキル） |

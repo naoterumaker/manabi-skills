@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Course Bundle Manifest",
-  "description": "course-ingestスキルが生成するcourse-bundleのマニフェストファイルのスキーマ",
+  "description": "manabi-ingestスキルが生成するcourse-bundleのマニフェストファイルのスキーマ",
   "type": "object",
   "required": ["course_name", "source_type", "language", "chapters"],
   "properties": {
@@ -11,8 +11,8 @@
     },
     "source_type": {
       "type": "string",
-      "enum": ["utage", "youtube", "local"],
-      "description": "入力ソースの種類"
+      "enum": ["utage", "youtube", "local", "note", "article"],
+      "description": "入力ソースの種類。note=note.com記事/マガジン、article=汎用Web記事"
     },
     "source_url": {
       "type": "string",
@@ -32,7 +32,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "title", "transcript_path", "screenshots_dir", "screenshot_count", "status"],
+        "required": ["id", "title", "screenshots_dir", "screenshot_count", "status"],
         "properties": {
           "id": {
             "type": "string",
@@ -43,14 +43,46 @@
             "type": "string",
             "description": "章タイトル"
           },
+          "content_type": {
+            "type": "string",
+            "enum": ["video", "article", "hybrid"],
+            "default": "video",
+            "description": "章のコンテンツ種別。video=動画（transcript_path必須）、article=記事（article_path必須）、hybrid=記事+埋め込み動画（両方必須）。抽出Agentはこのフィールドで必読ファイルを決定する（本文中の参照マーカー任せにしない）"
+          },
           "duration_seconds": {
             "type": ["integer", "null"],
             "minimum": 0,
             "description": "動画の長さ（秒）。不明な場合はnull"
           },
           "transcript_path": {
-            "type": "string",
-            "description": "transcriptファイルへの相対パス（manifest.jsonからの相対）"
+            "type": ["string", "null"],
+            "description": "transcriptファイルへの相対パス（manifest.jsonからの相対）。content_type=video/hybridで必須、articleではnull可"
+          },
+          "article_path": {
+            "type": ["string", "null"],
+            "description": "記事本文Markdownへの相対パス。content_type=article/hybridで必須"
+          },
+          "char_count": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "description": "記事本文の文字数。Agent配分の見積もりに使用"
+          },
+          "videos": {
+            "type": "array",
+            "description": "章内の埋め込み動画（hybrid章用）。取り込まなかった動画もstatus: skippedで必ず記録する（欠落の可視化）",
+            "items": {
+              "type": "object",
+              "required": ["id", "source_url", "status"],
+              "properties": {
+                "id": {"type": "string", "description": "動画ID（video_01等）"},
+                "source_url": {"type": "string", "description": "埋め込み元URL"},
+                "title": {"type": ["string", "null"]},
+                "duration_seconds": {"type": ["integer", "null"]},
+                "video_path": {"type": ["string", "null"], "description": "DL済み動画への相対パス"},
+                "transcript_path": {"type": ["string", "null"], "description": "文字起こしへの相対パス"},
+                "status": {"type": "string", "enum": ["fetched", "skipped", "failed"], "description": "skipped=ユーザーが取り込みを選択しなかった（ナレッジ側にunresolvedとして記録すること）"}
+              }
+            }
           },
           "transcript_ts_path": {
             "type": ["string", "null"],

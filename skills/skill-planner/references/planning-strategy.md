@@ -133,7 +133,7 @@ dependency_graphを深さ優先探索:
 
 | type | 状況 | 推奨アクション |
 |------|------|---------------|
-| resource_not_fetched | プロンプトやテンプレートが言及されているが未取得 | resource-fetcherの実行を提案 |
+| resource_not_fetched | プロンプトやテンプレートが言及されているが未取得 | manabi-ingestの実行を提案 |
 | url_inaccessible | URLがあるがアクセスできない（認証必要等） | ユーザーに手動取得を依頼 |
 | external_tool_required | 外部ツール（GPTs, Notion等）が必要 | ツールのアクセス方法を確認 |
 | permission_needed | 有料コンテンツや限定アクセス | ユーザーに権限確認を依頼 |

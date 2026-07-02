@@ -28,6 +28,8 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 | YouTube URL | `youtube.com` or `youtu.be` を含むURL | video-downloaderでDL→文字起こし→スクショ |
 | Udemy URL | `udemy.com` を含むURL | Chrome連携→動画DL→文字起こし→スクショ→補足資料取得 |
 | Loom URL | `loom.com` を含むURL | 動画DL→文字起こし→スクショ→説明文取得 |
+| note記事 URL | `note.com/{user}/n/` を含むURL | Chrome抽出→h2章分割→画像DL→note_to_bundle.py（後述） |
+| noteマガジン URL | `note.com/{user}/m/` を含むURL | 記事一覧を章一覧として提示→各記事を上記処理 |
 | ローカル動画ファイル | `.mp4`, `.mkv`, `.webm` などのファイルパス | 文字起こし→スクショ |
 | 既存transcript+screenshots | ディレクトリパス（transcripts/やscreenshots/を含む） | normalize_bundle.pyで正規化のみ |
 
@@ -54,7 +56,10 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 📦 Manabi Ingest
 
 入力: [判定した入力タイプと内容]
-出力先: [出力ディレクトリ]
+
+📁 出力先フォルダ（必ず確認する）:
+   デフォルト: [カレントディレクトリ]/[教材名]_bundle/
+   → ここでいいですか？変更する場合はパスを指定してください
 
 📋 講座について教えてください（わかる範囲で）
 
@@ -100,8 +105,27 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 ```
 
 **BLOCKER**: ユーザーの確認を得るまで取り込み処理を開始しない。
+**出力先フォルダはStep 1で必ず明示的に質問する**（表示するだけでは不十分。回答を得てから進む）。
 
-#### Step 2: 入力タイプ別パイプライン
+#### Step 2: ルート選択と入力タイプ別パイプライン
+
+**2ルート構造**: 教材は「講座系」と「記事系」の2ルートに分かれる。両者は主素材と補助素材が
+鏡像の関係にあり、どちらも同じcourse-bundleに正規化されて合流する。
+
+| ルート | 主素材 | 補助素材 | 対象入力 |
+|--------|--------|----------|----------|
+| **A: 講座ルート** | 動画（transcript + スクショ） | ページ文章（page_text.md）・リンク・配布物 | UTAGE / YouTube / Udemy / Loom / ローカル動画 |
+| **B: 記事ルート** | 本文（article.md）+ 記事内画像 | 埋め込み動画（video/）・リンク・特典 | note / Brain / 汎用Web記事（無料・有料とも） |
+
+**設計原則（if文の堰き止め）**:
+- `source_type` による分岐は**このStep 2のルート選択だけ**。ここが唯一のif文
+- Phase B（抽出以降）は章の `content_type`（video/article/hybrid）**のみ**を参照する。
+  Phase B以降でsource_typeを参照するのは設計違反（プラットフォームが増えるたびに
+  後段へ分岐が染み出すのを防ぐ）
+- 講座内の文章（ページ説明文）はルートAの補助素材として、記事内の動画はルートBの
+  補助素材として、それぞれのルートの中で処理する。ルートをまたぐif文を書かない
+- 例外は「主役判定」（記事なのに動画が主体）のみ。その場合はルートBからルートAに
+  **切り替える**のであって、両ルートを混ぜない
 
 ##### UTAGE URL の場合
 
@@ -128,6 +152,114 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 2. `~/.claude/skills/utage-manual/scripts/transcribe.py --timestamps` でタイムスタンプ付きJSON生成
 3. `~/.claude/skills/utage-manual/scripts/screenshot_extractor.py` でスクリーンショット抽出（pHashモード・デフォルト）
 4. Step 3 へ
+
+##### 記事ルート（ルートB）共通: プラットフォーム別アダプタ
+
+記事ルートで**プラットフォームごとに違うのは「アダプタ」（本文セレクタ＋ペイウォール判定）だけ**。
+抽出JS・note_to_bundle.py・以降のパイプラインは全プラットフォーム共通。
+新しい記事プラットフォームへの対応は、この表に1行足すことを意味する（パイプラインの複製はしない）。
+
+| プラットフォーム | 本文コンテナ | ペイウォール検知 | 購入済み判定 |
+|----------------|-------------|----------------|-------------|
+| note.com | `.note-common-styles__textnote-body` | 「この続きをみるには」「購入手続きへ」 | 「購入済」表示 or 本文末尾がフッター到達 |
+| Brain (brain-market.com) | （未調査。下記フォールバック手順で追加する） | — | — |
+| 汎用Web記事 | 不定 → フォールバック手順 | — | — |
+
+**未知サイトのフォールバック手順**（「本文が読めるか分からない」への答え）:
+1. `article`タグ等の**祖先要素を安易に掴まない**（ヘッダー・フッターが混入する）
+2. 本文候補コンテナをDOM調査する: 候補セレクタごとに `innerText.length` と `h2数` を
+   evaluate_scriptで測り、本文だけを包む最小のコンテナを特定する
+3. 抽出後、**取得文字数と冒頭・末尾をユーザーに提示**して「全文取れていますか？」を確認（BLOCKER）
+4. 確認が取れたら、そのセレクタを上のアダプタ表に追記する（次回から調査不要）
+
+##### note URL の場合
+
+**前提**: 有料記事は**自分が購入済みのもののみ**対象。Chrome連携（ログイン済みセッション）で取得する。
+
+1. Chromeで記事ページを開く
+2. **ペイウォール確認（BLOCKER）**: 本文中に「この続きをみるには」「購入手続きへ」があれば
+   **未購入のため取得不可**と報告して停止。回避は絶対に試みない。
+   購入済み判定: ページ内の「購入済」表示、または本文末尾がフッター（ハッシュタグ・チップ欄）まで到達していること
+3. 本文コンテナ `.note-common-styles__textnote-body` から以下のJSで抽出
+   （**注意**: `article`セレクタは祖先要素を掴むので使わない）:
+
+```javascript
+() => {
+  const body = document.querySelector('.note-common-styles__textnote-body');
+  const els = body.querySelectorAll('h2,h3,h4,p,figure,ul,ol,blockquote,pre,hr,iframe');
+  let md = '';
+  for (const node of els) {
+    const anc = node.parentElement.closest('figure,blockquote,ul,ol,pre');
+    if (anc && body.contains(anc)) continue;  // 入れ子の二重取り防止
+    const tag = node.tagName.toLowerCase();
+    const txt = node.innerText ? node.innerText.trim() : '';
+    if (tag === 'h2') md += `\n<<H2>>${txt}\n`;
+    else if (tag === 'h3') md += `\n### ${txt}\n\n`;
+    else if (tag === 'h4') md += `\n#### ${txt}\n\n`;
+    else if (tag === 'iframe') {
+      // 埋め込み動画の検知（欠落させない）
+      if (/youtube|youtu\.be|vimeo|loom/.test(node.src))
+        md += `\n<<VIDEO>>${node.src}<<VTITLE>>${node.title || ''}\n`;
+    }
+    else if (tag === 'figure') {
+      const img = node.querySelector('img');
+      const cap = node.querySelector('figcaption');
+      if (img && img.src.includes('assets.st-note.com'))
+        md += `\n<<IMG>>${img.src}<<CAP>>${cap ? cap.innerText.trim() : ''}\n`;
+      else if (txt) md += '\n' + txt.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
+    }
+    else if (tag === 'ul') md += '\n' + Array.from(node.querySelectorAll(':scope > li')).map(li => `- ${li.innerText.trim()}`).join('\n') + '\n\n';
+    else if (tag === 'ol') md += '\n' + Array.from(node.querySelectorAll(':scope > li')).map((li,i) => `${i+1}. ${li.innerText.trim()}`).join('\n') + '\n\n';
+    else if (tag === 'blockquote') md += '\n' + txt.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
+    else if (tag === 'hr') md += '\n---\n\n';
+    else if (tag === 'pre') md += '\n```\n' + txt + '\n```\n\n';
+    else if (txt) md += txt + '\n\n';
+  }
+  return JSON.stringify({
+    url: location.href,
+    title: document.querySelector('h1').innerText.trim(),
+    author: '(著者名)',
+    purchased: !!document.body.innerText.match(/購入済/),
+    raw_markdown: md
+  });
+}
+```
+
+4. 抽出JSONを `note_to_bundle.py` でcourse-bundle化:
+```bash
+python ~/.claude/skills/manabi-ingest/scripts/note_to_bundle.py raw.json "/path/to/bundle"
+```
+   - h2見出しで章分割（目次・フッターは自動除外、リード文はイントロ章）
+   - 記事内画像を各章の `screenshots/` にDL
+   - 本文中のリンク・裸URLを `links.json` に記録（特典・配布物の検知用）
+
+5. **埋め込み動画の確認（BLOCKER）**: 変換結果に動画があれば、必ずユーザーに提示:
+```
+⚠️ 記事内に動画がN本見つかりました
+  ch02: 解説動画（YouTube・12分）
+動画も取り込みますか？
+→ はい: yt-dlp（--cookies-from-browser chrome）でDL→文字起こし→pHashスクショ。
+       章は content_type: "hybrid" になり、video/とv{NN}_frame_*が追加される
+→ いいえ: manifest.videos に status: "skipped" で記録して続行
+       （後段の抽出でunresolvedとして明示される。静かな欠落にはしない）
+```
+
+6. **主役判定**: 本文が数百字しかなく長尺動画が主体の記事（動画講座のnote配布形式）は、
+   記事の章構造に情報がないため**動画1本＝1章**の動画パイプラインに切り替える。
+   迷う場合はユーザーに提示して選んでもらう:
+
+| 条件 | 扱い |
+|------|------|
+| 本文が主・動画が補足 | 記事のh2構造で章分割、動画は章内に吊るす（基本形） |
+| 動画が主・本文が添え書き | 動画1本＝1章。本文はpage_text.mdとして保存 |
+
+7. Step 4（バリデーション）へ（note_to_bundle.pyが正規化まで行うためStep 3は不要）
+
+##### noteマガジン URL の場合
+
+1. Chromeでマガジンページを開き、記事一覧（タイトル・URL・有料/無料）を取得
+2. 記事一覧を章一覧としてユーザーに提示し、処理対象を選択してもらう（動画講座の章選択と同じUI）
+3. 選択された各記事に「note URL の場合」の処理を実行（記事1本＝1章）
 
 ##### 既存transcript+screenshots の場合
 
@@ -221,13 +353,22 @@ python -c "
 import json, os, sys
 with open(sys.argv[1]) as f:
     m = json.load(f)
+OPTIONAL = {'transcript_ts_path'}  # 欠落を許容するキー
 ok = True
 for ch in m['chapters']:
-    for key in ['transcript_path', 'transcript_ts_path', 'screenshots_dir']:
-        path = os.path.join(os.path.dirname(sys.argv[1]), ch.get(key, ''))
-        if path and not os.path.exists(path):
+    ctype = ch.get('content_type', 'video')
+    keys = ['screenshots_dir']
+    if ctype in ('video', 'hybrid'):
+        keys += ['transcript_path', 'transcript_ts_path']
+    if ctype in ('article', 'hybrid'):
+        keys.append('article_path')
+    for key in keys:
+        rel = ch.get(key) or ''
+        path = os.path.join(os.path.dirname(sys.argv[1]), rel)
+        if rel and not os.path.exists(path):
             print(f'MISSING: {path}')
-            ok = True if key == 'transcript_ts_path' else False
+            if key not in OPTIONAL:
+                ok = False  # 一度Falseになったら戻さない（上書き禁止）
 if ok:
     print('All paths valid')
 else:
@@ -282,9 +423,34 @@ manifest.json のパスバリデーション: ✅ 全パス正常
 #### Level 1: ナレッジ抽出
 
 実行順序（各extractor は sonnet & 並列必須）:
-1. **concept-extractor** sonnet, 4並列（章を分割して4 Agent同時起動）— マニュアルがあればマニュアルを一次ソースとして使用
+1. **concept-extractor** sonnet, 4並列（章を分割して4 Agent同時起動）— マニュアルがあればマニュアルを一次ソースとして使用。concept-extractorとvisual-indexerは互いに独立なので**同時に起動してよい**
 2. **visual-indexer** sonnet, 4並列（コスト重いため並列必須）— スクリーンショットの分類・タグ付け
 3. **procedure-extractor** sonnet, 4並列 — visual-index 完了後に実行（画像参照が必要なため）
+
+##### 章内完結ルール（並列Agentの鉄則）
+
+**章＝自己完結ユニット。並列Agentは自分の担当章の箱の中だけを読み書きする。**
+
+| ルール | 内容 |
+|--------|------|
+| 書き込み先は章の中だけ | `chapters/NN/knowledge.json`, `chapters/NN/visual-index.json`, `chapters/NN/procedures.json` |
+| 全章統合は書かせない | `knowledge-graph.json`・`visual-catalog.json`は**全Agent完了後にメインセッション（または専用Agent1体）が1回だけ生成**。並列Agentに書かせると部分グラフの上書き合戦になる |
+| custom_typesは先行1章で確定 | visual-indexerの講座固有型は先行1章のAgentが提案→確定した型定義を残りAgentのプロンプトに配布。各Agentに勝手に発明させない（タクソノミー分裂防止） |
+| 必読リストはmanifest駆動 | 章の`content_type`を見て必読ファイルを決める。本文中の参照マーカー任せにしない |
+
+##### content_type別の必読ファイル（BLOCKER）
+
+| content_type | Agentが必ず全文読むもの |
+|--------------|------------------------|
+| video | transcript.txt + screenshots/ |
+| article | article.md + screenshots/（画像0枚の章はvisual-index.jsonを空で出してスキップ） |
+| hybrid | article.md + **video/transcript_*.txt** + screenshots/（記事画像`img_*`と動画フレーム`v*_frame_*`の両方） |
+
+- hybrid章はテキスト量が跳ね上がるため**1Agent専属**にする（char_count＋動画分で見積もる）
+- hybrid章でtranscriptを読まずにknowledge.jsonを出すのは検証で弾く
+- `videos[].status: "skipped"`（未取り込み動画）がある章は、knowledge.jsonに
+  「未処理動画あり（URL・長さ）」のunresolvedエントリを必ず記録する。**静かな欠落は禁止**
+- 抽出結果には`source: "article" | "video"`を付ける（記事本文は原文、文字起こしはWhisper経由で信頼度が異なるため）
 
 #### Level 2: ナレッジ + マニュアル生成
 
@@ -299,6 +465,27 @@ Level 2 の全処理に加え:
 7. **skill-planner** opus — スキル化プランを生成してユーザーに提示
    - **BLOCKER**: プランへのユーザー承認を待つ
 8. **skill-synthesizer** opus — 承認されたスキルを生成（**staging dir 経由で cp**、~/.claude/skills/ への直接書き込み不可）
+
+#### 仕上げ（全レベル共通・オプション）: HTMLビューア生成
+
+どのレベルでも、処理完了報告の後に必ず提案する:
+
+```
+📖 HTMLビューアを生成しますか？
+→ 左に章目次・右に本文＋画像の1ファイルビューア（ブラウザで開くだけ）
+```
+
+```bash
+python ~/.claude/skills/manabi-ingest/scripts/bundle_to_html.py "/path/to/course-bundle"
+# → bundle直下に manual_viewer.html を生成
+```
+
+- **役割分担**: MDは資産（原文・再抽出可能・Git管理）、HTMLは人間用ビューア（認知負荷対策）
+- 表示ソースの優先順位: manual.md > article.md > transcript.txt（章ごとに自動選択）
+- knowledge.jsonがあれば章冒頭に「💡この章の概念」折りたたみパネルを自動挿入
+- 章ごと切り替え表示（左目次クリック / ←→キー / 前後章ボタン）
+- 単一HTMLファイル・依存なし。画像はbundle内を相対参照するため**bundle直下から動かさない**
+- 生成後、`file://` でChromeに開いて見た目を確認する
 
 ---
 
@@ -404,21 +591,33 @@ Phase B Level 3: skill-synthesizer完了後
 course-bundle/
   manifest.json
   chapters/
-    00/
-      transcript.txt
+    00/                     ← 章＝自己完結ユニット
+      transcript.txt        ← video/hybrid章
       transcript_ts.json
+      article.md            ← article/hybrid章（note等の記事本文）
+      video/                ← hybrid章の埋め込み動画
+        video_01.mp4
+        transcript_01.txt
       screenshots/
         title.jpg
-        frame_001.jpg ...
+        frame_001.jpg ...   ← 動画由来（講座動画）
+        img_001.png ...     ← 記事由来
+        v01_frame_001.jpg   ← 埋め込み動画由来（v{NN}_で名前空間分離）
       page_text.md
       links.json
       manual.md             ← utage-manual output (Level 2+)
+      knowledge.json        ← Level 1+ 抽出結果（章の中に置く）
+      visual-index.json
+      procedures.json
     01/ ...
+  knowledge/
+    knowledge-graph.json    ← 全章統合。集約は最後に1回だけ
   resources/
     prompts/
     pdfs/
     templates/
   resources-manifest.json
+  visual-catalog.json       ← 全章統合。同上
 ```
 
 ### manifest.json の構造
@@ -471,6 +670,15 @@ course-bundle/
 | 全章完了してからまとめてレビュー | 先行1章でサンプルレビュー | 手戻りコスト最小化 |
 | サンプルレビューで並列処理を止める | 並列継続しつつ確認 | 速度を犠牲にしない |
 | 30秒間隔でスクショ抽出（--no-phash） | pHashモード（デフォルト）で抽出 | スライド見落とし・重複を防げる |
+| 未購入の有料記事をペイウォール回避で取得 | 未購入と報告して停止 | 購入済みのみ対象。規約・著作権 |
+| 埋め込み動画を無言でスキップ | 検知→ユーザー確認→取り込まない場合もskipped記録 | 静かな欠落は追跡不能 |
+| 参照マーカー頼みで動画transcriptを読ませる | manifest.content_typeで必読リストを機械的に決定 | Agentがマーカーを見落とすと丸ごと欠落する |
+| 並列Agentにknowledge-graph.jsonを書かせる | 集約は全Agent完了後に1回だけ | 部分グラフの上書き合戦になる |
+| 各AgentにCustom_typesを発明させる | 先行1章で確定して残りAgentに配布 | タクソノミー分裂防止 |
+| 出力先を表示だけして処理開始 | 出力先を明示的に質問し回答を得る | 意図しない場所への大量書き込み防止 |
+| Phase B以降でsource_typeを分岐に使う | content_typeのみ参照 | 後段への分岐の染み出し防止 |
+| 記事プラットフォーム対応でパイプラインを複製 | アダプタ表に1行追加 | 複製はメンテ地獄（改名事故の教訓） |
+| 未知サイトで`article`タグを安易に掴む | 最小コンテナをDOM調査→全文確認 | 祖先要素はヘッダー・フッターが混入する |
 
 ---
 
@@ -511,6 +719,8 @@ course-bundle/
 | 文字起こし | `~/.claude/skills/utage-manual/scripts/transcribe.py` |
 | スクリーンショット抽出 | `~/.claude/skills/utage-manual/scripts/screenshot_extractor.py` |
 | YouTubeダウンロード | video-downloader スキル |
+| note記事→bundle変換 | `~/.claude/skills/manabi-ingest/scripts/note_to_bundle.py` |
+| HTMLビューア生成 | `~/.claude/skills/manabi-ingest/scripts/bundle_to_html.py` |
 | 正規化 | `~/.claude/skills/manabi-ingest/scripts/normalize_bundle.py` |
 | ナレッジ抽出 | concept-extractor スキル |
 | 画像分類 | visual-indexer スキル |

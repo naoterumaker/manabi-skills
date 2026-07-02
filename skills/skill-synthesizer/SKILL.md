@@ -55,8 +55,8 @@ After completion, the user will move them to ~/.claude/skills/.」
 | `skill-plan.json` | skill-planner | Yes |
 | `knowledge/*.json` | concept-extractor | Yes |
 | `chapters/*/procedures.json` | procedure-extractor | Yes |
-| `resources/` | resource-fetcher | 条件付き |
-| `resources-manifest.json` | resource-fetcher | 条件付き |
+| `resources/` | manabi-ingest | 条件付き |
+| `resources-manifest.json` | manabi-ingest | 条件付き |
 | `manuals/*.md` パス | utage-manual | No（参照のみ） |
 
 ### 出力構造
@@ -356,9 +356,9 @@ test -f "${BUNDLE_DIR}/manuals/${manual_file}" && echo "OK" || echo "MISSING"
 | やらないこと | 代わりに使うもの |
 |------------|----------------|
 | スキル構成の設計・分割判断 | skill-planner |
-| 講座動画の取り込み | course-ingest |
+| 講座動画の取り込み | manabi-ingest |
 | 概念の抽出 | concept-extractor |
 | 手順の抽出 | procedure-extractor |
-| リソースの取得 | resource-fetcher |
+| リソースの取得 | manabi-ingest |
 | マニュアル生成 | utage-manual |
 | スキル設計の相談 | teru-skill-creator |

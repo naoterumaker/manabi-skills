@@ -1,6 +1,6 @@
 ---
 name: concept-extractor
-description: "講座トランスクリプトから概念・定義・暗黙知・重要引用・教え方パターンを構造化抽出しknowledge.jsonとknowledge-graph.jsonを生成。course-ingestのcourse-bundleを入力とする。「概念抽出」「ナレッジ抽出」「concept extract」「知識抽出」で発動。テキストのみで完結（画像不要）。procedure-extractorやvisual-indexerと並列実行可能。"
+description: "講座トランスクリプトから概念・定義・暗黙知・重要引用・教え方パターンを構造化抽出しknowledge.jsonとknowledge-graph.jsonを生成。manabi-ingestのcourse-bundleを入力とする。「概念抽出」「ナレッジ抽出」「concept extract」「知識抽出」で発動。テキストのみで完結（画像不要）。procedure-extractorやvisual-indexerと並列実行可能。"
 ---
 
 # Concept Extractor
@@ -46,7 +46,7 @@ Agent(
 **スコープ外:**
 - 画像・スライドの分析（visual-indexerの責務）
 - 手順・ワークフローの抽出（procedure-extractorの責務）
-- トランスクリプトの作成・整形（course-ingestの責務）
+- トランスクリプトの作成・整形（manabi-ingestの責務）
 
 ---
 
@@ -66,10 +66,10 @@ Agent(
 
 | 必須 | 内容 |
 |------|------|
-| manifest.json | course-ingestが生成したコース構成ファイル |
+| manifest.json | manabi-ingestが生成したコース構成ファイル |
 | chapters/chXX/manual.md または transcript.txt | 各章のソーステキスト（下記優先順位参照） |
 
-manifest.jsonが見つからない場合はユーザーに確認し、course-ingestの実行を提案すること。
+manifest.jsonが見つからない場合はユーザーに確認し、manabi-ingestの実行を提案すること。
 
 ### 入力の優先順位
 
@@ -78,11 +78,29 @@ manifest.jsonが見つからない場合はユーザーに確認し、course-ing
 | 優先度 | ソース | 理由 |
 |--------|--------|------|
 | 1 | `chapters/{id}/manual.md` | utage-manual出力。編集済み・構造化済み・画像紐付け済み |
-| 2 | `chapters/{id}/page_text.md` | 講座ページの説明文。補足情報を含む |
-| 3 | `chapters/{id}/transcript.txt` | 生トランスクリプト。マニュアルがない場合のフォールバック |
+| 2 | `chapters/{id}/article.md` | 記事本文（note等）。**著者の原文そのもの**なので引用の信頼度が最も高い |
+| 3 | `chapters/{id}/page_text.md` | 講座ページの説明文。補足情報を含む |
+| 4 | `chapters/{id}/transcript.txt` | 生トランスクリプト。上位ソースがない場合のフォールバック |
 
 マニュアルがある場合はマニュアルを一次ソースとし、トランスクリプトは
 マニュアルに含まれていない情報の補完に使う。
+
+### 必読リストはmanifest駆動（BLOCKER）
+
+章の`content_type`で必読ファイルを機械的に決める。本文中の参照マーカー任せにしない:
+
+- `video` → transcript.txt
+- `article` → article.md
+- `hybrid` → article.md **と** `video/transcript_*.txt` の両方（片方だけで抽出開始してはならない）
+
+さらに:
+- 抽出した各要素に `source: "article" | "video"` を付ける（記事本文は原文、
+  文字起こしはWhisper経由で信頼度が異なる。key_quoteの原文性判断に必須）
+- manifestの`videos[]`に`status: "skipped"`がある章は、knowledge.jsonに
+  `unresolved: [{"type": "unprocessed_video", "url": "...", "note": "未取り込み動画あり"}]`
+  を必ず記録する（静かな欠落の禁止）
+- 記事画像が図解している概念には `visual_refs: ["img_002.png"]` を付け、
+  visual-index.json側の `illustrates` と双方向リンクにする
 
 ### BLOCKER: ソーステキスト全文読み込み
 
@@ -161,6 +179,10 @@ manifest.jsonからコース名と章リストを取得する。
 #### Step 5: knowledge-graph.json生成
 
 **BLOCKER: 全章のknowledge.json生成完了後に実行すること。1章だけ見て全体グラフを作ってはならない。**
+
+**並列実行時のBLOCKER**: このStepは章担当の並列Agentには実行させない。
+**全Agent完了後にメインセッション（または専用Agent1体）が1回だけ**実行する。
+並列Agentが各自グラフを書くと部分グラフの上書き合戦になる。
 
 全章のknowledge.jsonを統合し:
 

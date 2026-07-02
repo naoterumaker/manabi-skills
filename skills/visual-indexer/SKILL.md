@@ -65,12 +65,26 @@ Agent(
 
 ```
 BLOCKER: manifest.jsonが存在するか確認
-  → 存在しない場合は course-ingest を先に実行するよう案内して停止
+  → 存在しない場合は manabi-ingest を先に実行するよう案内して停止
 ```
 
 1. `manifest.json` を読み込み、チャプター一覧とスクリーンショットディレクトリを取得
 2. 各チャプターのスクリーンショットディレクトリの存在を確認
 3. 全フレーム数をカウントし、処理計画を立てる
+4. **画像0枚の章**（記事章によくある）はエラーにせず、`visual-index.json` を
+   `{"chapter_id": "NN", "frames": []}` で出力してスキップする
+
+### 記事画像（img_*）の扱い
+
+note等の記事由来の画像（`img_*`）は動画フレームと性質が異なる。**著者が意図的に
+その位置へ置いた図解**なので、talking_head/transitionのようなゴミ分類はほぼ不要。
+代わりに以下を行う:
+
+1. article.md内の画像位置から `context_heading`（直近の見出し）を記録する
+2. 図解が説明している概念を特定し `illustrates: "cNN-XX"` を設定する
+   （concept-extractor側の `visual_refs` と双方向リンクになる）
+3. アイキャッチ・バナー等の装飾画像は `type: "decoration"` として抽出対象外にマーク
+4. 埋め込み動画由来のフレーム（`v{NN}_frame_*`）は通常の動画フレームとして扱う
 
 ### Phase 0.5: 講座固有型の発見
 
@@ -83,6 +97,11 @@ BLOCKER: manifest.jsonが存在するか確認
 5. 以降のフレームはコア型 + 講座固有型から選択
 
 注: 完全自動化する場合は、Phase 0.5でAgent自身が判断して登録する。
+
+**並列実行時のBLOCKER**: custom_typesの発見・確定は**先行1章のAgentだけ**が行う。
+確定した型定義はオーケストレーターが残りAgentのプロンプトに配布する。
+各Agentが独立に型を発明すると同じ画面に別名が付き、タクソノミーが分裂する
+（例: `tmux_pane` と `terminal_tmux` の混在）。
 
 ### Phase 1: チャプター別フレーム処理
 
@@ -117,6 +136,7 @@ BLOCKER: 各画像は必ずReadツールで読み取ってから分類する
 | `diagram` | フローチャート・図解 | 概念関係の可視化 |
 | `talking_head` | 話者の映像のみ | 低価値、スキップ可 |
 | `transition` | 空白・遷移フレーム | スキップ |
+| `decoration` | アイキャッチ・バナー等の装飾（記事画像用） | 抽出対象外 |
 
 コア型に当てはまらない繰り返し画面は **講座固有型（custom_types）** として登録する（後述）。
 
@@ -167,6 +187,10 @@ BLOCKER: 各画像は必ずReadツールで読み取ってから分類する
 スキーマ: `schemas/visual-index.schema.json` に準拠すること。
 
 ### Phase 2: visual-catalog.json 生成
+
+**BLOCKER**: このPhaseは並列Agentには実行させない。**全Agent完了後にメイン
+セッション（または専用Agent1体）が1回だけ**実行する。並列Agentが各自生成すると
+部分カタログの上書き合戦になる。
 
 全チャプターの処理完了後、コース全体のカタログを生成:
 
@@ -229,8 +253,8 @@ BLOCKER: 各画像は必ずReadツールで読み取ってから分類する
 
 | Gate | 条件 | 未達時の対応 |
 |------|------|-------------|
-| G1 | manifest.jsonが存在する | course-ingestを先に実行するよう案内 |
-| G2 | スクリーンショットディレクトリが存在する | video-to-framesを先に実行するよう案内 |
+| G1 | manifest.jsonが存在する | manabi-ingestを先に実行するよう案内 |
+| G2 | スクリーンショットディレクトリが存在する | manabi-ingestを先に実行するよう案内 |
 | G3 | 各画像をReadツールで実際に読み取った | ファイル名推測は禁止、必ず読み取る |
 | G4 | 全フレームを処理した（サンプルではなく全数） | 未処理フレームがあれば追加処理 |
 | G5 | 自己検証チェックリスト全項目パス | 失敗項目を修正して再検証 |
@@ -288,8 +312,7 @@ BLOCKER: 各画像は必ずReadツールで読み取ってから分類する
 
 | スキル | 関係 |
 |--------|------|
-| course-ingest | 前提: manifest.jsonを生成 |
-| video-to-frames | 前提: スクリーンショットを生成 |
+| manabi-ingest | 前提: manifest.jsonとスクリーンショットを生成 |
 | procedure-extractor | 後続: フレーム分類とOCRを利用 |
 | concept-extractor | 並列実行可能: content_slideを補強に利用 |
 
