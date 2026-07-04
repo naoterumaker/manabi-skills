@@ -11,7 +11,7 @@
     },
     "source_type": {
       "type": "string",
-      "enum": ["utage", "youtube", "local", "note", "article"],
+      "enum": ["utage", "youtube", "local", "note", "article", "legacy"],
       "description": "入力ソースの種類。note=note.com記事/マガジン、article=汎用Web記事"
     },
     "source_url": {

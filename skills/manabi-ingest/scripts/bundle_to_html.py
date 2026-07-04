@@ -105,7 +105,7 @@ def md_to_html(md):
 def concept_panel(kpath):
     if not kpath.exists():
         return ""
-    k = json.loads(kpath.read_text())
+    k = json.loads(kpath.read_text(encoding="utf-8"))
     cons = k.get("concepts", [])
     if not cons:
         return ""
@@ -120,7 +120,14 @@ def concept_panel(kpath):
 def main():
     bundle = pathlib.Path(sys.argv[1]).resolve()
     out_path = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else bundle / "manual_viewer.html"
-    m = json.loads((bundle / "manifest.json").read_text())
+    out_path = out_path.resolve()
+    # バンドル外出力の警告（画像の相対パスが壊れる）
+    try:
+        out_path.relative_to(bundle)
+    except ValueError:
+        print(f"WARN: 出力先がバンドル外です: {out_path}")
+        print(f"      画像の相対パス参照が壊れます。バンドル直下への出力を推奨します。")
+    m = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
 
     chapters = []
     for ch in m["chapters"]:
@@ -131,7 +138,7 @@ def main():
                                 chdir / "transcript.txt"] if p.exists()), None)
         if not src:
             continue
-        body = src.read_text()
+        body = src.read_text(encoding="utf-8")
         if src.name == "transcript.txt":
             body = "\n\n".join(body.split("\n"))
         # 画像パスを章相対 → バンドル相対へ
@@ -143,7 +150,7 @@ def main():
     for ch in m["chapters"]:
         kp = bundle / "chapters" / ch["id"] / "knowledge.json"
         if kp.exists():
-            total_concepts += len(json.loads(kp.read_text()).get("concepts", []))
+            total_concepts += len(json.loads(kp.read_text(encoding="utf-8")).get("concepts", []))
 
     meta = {
         "course": m["course_name"],
@@ -218,23 +225,50 @@ main pre{background:#2b2a26;color:#eee;padding:var(--s0);border-radius:var(--s-1
   <ol id="toc"></ol>
 </nav>
 <main id="content"></main>
+<script type="application/json" id="chapters-data">%%CHAPTERS%%</script>
 <script>
-const CHAPTERS = %%CHAPTERS%%;
+const CHAPTERS = JSON.parse(document.getElementById('chapters-data').textContent);
 const toc = document.getElementById('toc');
 const content = document.getElementById('content');
 function show(idx){
   const ch = CHAPTERS[idx];
-  let pager = '<div class="pager">';
-  pager += idx>0 ? `<a href="#${CHAPTERS[idx-1].id}">← ${CHAPTERS[idx-1].title}</a>` : '<span style="flex:1"></span>';
-  pager += idx<CHAPTERS.length-1 ? `<a class="next" href="#${CHAPTERS[idx+1].id}">${CHAPTERS[idx+1].title} →</a>` : '<span style="flex:1"></span>';
-  pager += '</div>';
-  content.innerHTML = ch.html + pager;
+  // ページャはDOM操作で構築（innerHTML文字列連結によるXSSを回避）
+  const pager = document.createElement('div');
+  pager.className = 'pager';
+  if(idx > 0){
+    const a = document.createElement('a');
+    a.href = '#' + CHAPTERS[idx-1].id;
+    a.textContent = '← ' + CHAPTERS[idx-1].title;
+    pager.appendChild(a);
+  } else {
+    const s = document.createElement('span');
+    s.style.flex = '1';
+    pager.appendChild(s);
+  }
+  if(idx < CHAPTERS.length-1){
+    const a = document.createElement('a');
+    a.href = '#' + CHAPTERS[idx+1].id;
+    a.className = 'next';
+    a.textContent = CHAPTERS[idx+1].title + ' →';
+    pager.appendChild(a);
+  } else {
+    const s = document.createElement('span');
+    s.style.flex = '1';
+    pager.appendChild(s);
+  }
+  // ch.html はサーバー側でhtmlエスケープ済みのMarkdown変換結果
+  content.innerHTML = ch.html;
+  content.appendChild(pager);
   document.querySelectorAll('#toc a').forEach((a,i)=>a.classList.toggle('active', i===idx));
   window.scrollTo(0,0);
 }
 CHAPTERS.forEach((ch,i)=>{
   const li = document.createElement('li');
-  li.innerHTML = `<a class="ch" href="#${ch.id}">${ch.title}</a>`;
+  const a = document.createElement('a');
+  a.className = 'ch';
+  a.href = '#' + ch.id;
+  a.textContent = ch.title;  // textContentでXSS回避
+  li.appendChild(a);
   toc.appendChild(li);
 });
 function route(){
@@ -253,12 +287,14 @@ route();
 </body>
 </html>"""
 
+    # <script type="application/json"> 内なのでHTMLエスケープのみでよい（</script>脱出不要）
+    chapters_json = json.dumps(chapters, ensure_ascii=False)
     page = (tpl
             .replace("%%COURSE%%", html.escape(meta["course"]))
             .replace("%%SPEAKER%%", html.escape(meta["speaker"]))
             .replace("%%STATS%%", html.escape(meta["stats"]))
             .replace("%%SOURCE%%", html.escape(meta["source"]))
-            .replace("%%CHAPTERS%%", json.dumps(chapters, ensure_ascii=False)))
+            .replace("%%CHAPTERS%%", chapters_json))
     out_path.write_text(page, encoding="utf-8")
     print(f"生成: {out_path} ({out_path.stat().st_size:,} bytes / {len(chapters)}章)")
 

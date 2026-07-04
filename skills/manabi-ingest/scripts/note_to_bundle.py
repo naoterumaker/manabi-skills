@@ -13,17 +13,29 @@
   manifest.json（content_type: article / hybrid）
 
 使い方:
-  python3 note_to_bundle.py raw.json /path/to/output-bundle
+  python3 note_to_bundle.py raw.json /path/to/output-bundle [--force]
 """
+import argparse
 import json
 import os
 import pathlib
 import re
+import shutil
 import sys
 import urllib.request
 
 SKIP_HEADINGS = re.compile(r"^(目次|高評価して応援しよう)")
 OPTIONAL_KEYS = {"transcript_ts_path"}
+
+# 画像DL上限: 30MB
+IMAGE_SIZE_LIMIT = 30 * 1024 * 1024
+
+# マーカー正規表現（行単位マッチ）
+IMG_PATTERN = re.compile(r"^<<IMG>>(\S+?)<<CAP>>(.*)$", re.MULTILINE)
+VIDEO_PATTERN = re.compile(r"^<<VIDEO>>(\S+?)<<VTITLE>>(.*)$", re.MULTILINE)
+
+# 裸URL末尾から除去する句読点・閉じ括弧
+URL_TRAILING_JUNK = re.compile(r"[）)。、」\]]+$")
 
 
 def classify_link(url):
@@ -39,7 +51,7 @@ def classify_link(url):
 
 
 def load_raw(path):
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         outer = json.load(f)
     # evaluate_scriptの出力はJSON文字列が二重ラップされる場合がある
     return json.loads(outer) if isinstance(outer, str) else outer
@@ -54,38 +66,61 @@ def split_chapters(raw_md):
     return [(h, b) for h, b in sections if not SKIP_HEADINGS.match(h) and b.strip()]
 
 
+def download_image(url, dest, fname, cid):
+    """画像をDL。失敗時はFalseを返す（例外を上げない）"""
+    try:
+        req = urllib.request.urlopen(url, timeout=30)
+        data = req.read(IMAGE_SIZE_LIMIT + 1)
+        if len(data) > IMAGE_SIZE_LIMIT:
+            print(f"  WARN image too large ch{cid} {fname}: {len(data)} bytes > 30MB limit")
+            return False
+        dest.write_bytes(data)
+        return True
+    except Exception as e:
+        print(f"  WARN image fail ch{cid} {fname}: {e}")
+        return False
+
+
 def process_chapter(cid, heading, body_md, chdir):
-    """画像DL・動画マーカー変換・links.json生成。(article_md, img_count, videos)を返す"""
+    """画像DL・動画マーカー変換・links.json生成。(article_md, img_count, videos, status)を返す"""
     shots = chdir / "screenshots"
     shots.mkdir(parents=True, exist_ok=True)
     links = []
+    has_failure = False
 
     # --- 画像: DLしてMarkdown参照に置換 ---
-    for n, (url, cap) in enumerate(re.findall(r"<<IMG>>(\S+?)<<CAP>>(.*)", body_md), 1):
+    for n, m in enumerate(IMG_PATTERN.finditer(body_md), 1):
+        url, cap = m.group(1), m.group(2)
         clean = url.split("?")[0]
         ext = os.path.splitext(clean)[1] or ".png"
         fname = f"img_{n:03d}{ext}"
         dest = shots / fname
         if not dest.exists():
-            try:
-                urllib.request.urlretrieve(url, dest)
-            except Exception as e:
-                print(f"  WARN image fail ch{cid} {fname}: {e}")
+            ok = download_image(url, dest, fname, cid)
+            if not ok:
+                has_failure = True
+                # 失敗時は画像参照を除去し失敗マーカーテキストで置換
+                body_md = body_md.replace(
+                    m.group(0),
+                    f"（画像取得失敗: {url} ）",
+                    1,
+                )
                 continue
         alt = cap or f"図{n}"
         body_md = body_md.replace(
-            f"<<IMG>>{url}<<CAP>>{cap}",
+            m.group(0),
             f"![{alt}](screenshots/{fname})" + (f"\n*{cap}*" if cap else ""),
             1,
         )
 
     # --- 埋め込み動画: 人間用マーカー + manifest記録（欠落させない） ---
     videos = []
-    for n, (url, vtitle) in enumerate(re.findall(r"<<VIDEO>>(\S+?)<<VTITLE>>(.*)", body_md), 1):
+    for n, m in enumerate(VIDEO_PATTERN.finditer(body_md), 1):
+        url, vtitle = m.group(1), m.group(2)
         vid = f"video_{n:02d}"
         label = vtitle or "埋め込み動画"
         body_md = body_md.replace(
-            f"<<VIDEO>>{url}<<VTITLE>>{vtitle}",
+            m.group(0),
             f"[🎬 {vid}: {label}]({url})\n※取り込み済みの場合の文字起こし: video/transcript_{n:02d}.txt",
             1,
         )
@@ -104,6 +139,8 @@ def process_chapter(cid, heading, body_md, chdir):
                           "type": classify_link(url)})
             seen.add(url)
     for url in re.findall(r"(?<![(\[])(https?://[^\s)\]]+)", body_md):
+        # 末尾の句読点・閉じ括弧を除去
+        url = URL_TRAILING_JUNK.sub("", url)
         if url not in seen and "assets.st-note.com" not in url:
             links.append({"text": "", "url": url, "context": heading,
                           "type": classify_link(url)})
@@ -114,7 +151,10 @@ def process_chapter(cid, heading, body_md, chdir):
 
     article = f"## {heading}\n\n{body_md.strip()}\n"
     (chdir / "article.md").write_text(article, encoding="utf-8")
-    return article, len(list(shots.glob("img_*"))), videos
+    status = "partial" if has_failure else "complete"
+    if has_failure:
+        print(f"  WARN ch{cid} ({heading[:20]}): 画像取得失敗あり → status=partial")
+    return article, len(list(shots.glob("img_*"))), videos, status
 
 
 def validate(out_dir, manifest):
@@ -136,8 +176,30 @@ def validate(out_dir, manifest):
 
 
 def main():
-    raw_path, out = sys.argv[1], pathlib.Path(sys.argv[2])
-    data = load_raw(raw_path)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("raw_path")
+    ap.add_argument("out_dir")
+    ap.add_argument("--force", action="store_true",
+                    help="既存の出力先バンドルを上書きする（章ディレクトリを再作成）")
+    args = ap.parse_args()
+
+    out = pathlib.Path(args.out_dir)
+
+    # 再実行時の汚染防止: 既存出力があれば --force なしで停止
+    if out.exists() and (out / "manifest.json").exists():
+        if not args.force:
+            sys.exit(
+                f"既存出力あり: {out}\n"
+                "上書きする場合は --force を指定してください。"
+            )
+        else:
+            # --force: 章ディレクトリを削除して再作成（manifest.jsonは最後に上書き）
+            chapters_dir = out / "chapters"
+            if chapters_dir.exists():
+                shutil.rmtree(chapters_dir)
+            print(f"--force: {out}/chapters を再作成します")
+
+    data = load_raw(args.raw_path)
     chapters = split_chapters(data["raw_markdown"])
 
     manifest = {
@@ -152,7 +214,27 @@ def main():
     for idx, (heading, body) in enumerate(chapters):
         cid = f"{idx:02d}"
         chdir = out / "chapters" / cid
-        article, img_count, videos = process_chapter(cid, heading, body, chdir)
+
+        # 空章はdropせずpartialで残す
+        if not body.strip():
+            print(f"  WARN ch{cid} ({heading[:20]}): 本文が空 → status=partial で保持")
+            chdir.mkdir(parents=True, exist_ok=True)
+            (chdir / "screenshots").mkdir(parents=True, exist_ok=True)
+            (chdir / "article.md").write_text(f"## {heading}\n\n", encoding="utf-8")
+            entry = {
+                "id": cid,
+                "title": heading,
+                "content_type": "article",
+                "article_path": f"chapters/{cid}/article.md",
+                "screenshots_dir": f"chapters/{cid}/screenshots/",
+                "screenshot_count": 0,
+                "char_count": 0,
+                "status": "partial",
+            }
+            manifest["chapters"].append(entry)
+            continue
+
+        article, img_count, videos, status = process_chapter(cid, heading, body, chdir)
         total_videos += len(videos)
         entry = {
             "id": cid,
@@ -162,7 +244,7 @@ def main():
             "screenshots_dir": f"chapters/{cid}/screenshots/",
             "screenshot_count": img_count,
             "char_count": len(article),
-            "status": "complete",
+            "status": status,
         }
         if videos:
             entry["videos"] = videos
