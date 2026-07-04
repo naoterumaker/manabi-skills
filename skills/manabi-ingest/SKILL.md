@@ -207,8 +207,15 @@ Noの場合（またはNode.jsがない場合）:
 | プラットフォーム | 本文コンテナ | ペイウォール検知 | 購入済み判定 |
 |----------------|-------------|----------------|-------------|
 | note.com | `.note-common-styles__textnote-body` | 「この続きをみるには」「購入手続きへ」 | 「購入済」表示 or 本文末尾がフッター到達 |
-| Brain (brain-market.com) | （未調査。下記フォールバック手順で追加する） | — | — |
+| Brain (brain-market.com) | `[class*="_article_container_"] [class*="_body_"]`（クラス名はCSS Modulesハッシュ付きのため部分一致で） | 「購入する」のみで「購入済み」なし | 「購入済み」表示 + 本文末尾が紹介フッター到達。※本文中の「ここから先は」は著者の言い回しのことがあるので単独ではバリア判定しない |
 | 汎用Web記事 | 不定 → フォールバック手順 | — | — |
+
+**Brainの追加知見**（2026-07実証）:
+- 埋め込みYouTube動画はiframeではなく `img.youtube.com` のサムネイル（`_container_nf4xe_*`）として
+  レンダリングされる → サムネのsrcから動画ID（`/vi/<id>/`）を抽出して`<<VIDEO>>`マーカー化する
+- 画像は `image.brain-market.com` ドメインで判定（それ以外のimgはUI部品・拡張機能の混入）
+- Chrome拡張のサイドバー（gemini-sidebar-content等）がDOM調査の候補に混ざるので無視すること
+- 動画DLでyt-dlpがSABR実験エラーを出す場合: `--extractor-args "youtube:player_client=android,web_safari"` でリトライ
 
 **未知サイトのフォールバック手順**（「本文が読めるか分からない」への答え）:
 1. `article`タグ等の**祖先要素を安易に掴まない**（ヘッダー・フッターが混入する）
