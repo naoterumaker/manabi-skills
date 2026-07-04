@@ -41,8 +41,25 @@ echo '<ホーム>' > ~/.claude/manabi-home
 - 既存マニュアル・バンドルの移行: `scripts/migrate_to_library.py` を使う
   - 新形式はそのまま移動、旧形式（manuals/*.md）はmanifest生成のみで中身無加工
   - 同一講座のbundle+manualペアは `--pair-into` でbundle内source_media/に同居させ1講座1エントリを保つ
-- 閲覧: **manabi-hub**（localhost:3939のダッシュボード。bundles/を毎回スキャンするので置くだけで反映）
-  / 配布用は `scripts/bundle_to_html.py` で単一HTML書き出し
+初回のホーム作成直後に、ダッシュボードのセットアップを提案する:
+
+```
+📊 ダッシュボード（manabi-hub）もセットアップしますか？
+   → 蔵書が並ぶWebダッシュボード。検索・フィルタ・リーダー・テーマ切替付き
+   → Node.js 18+ が必要です
+```
+
+Yesの場合:
+```bash
+git clone https://github.com/naoterumaker/manabi-hub.git ~/manabi-hub
+cd ~/manabi-hub && npm install && npm run build
+起動: (nohup npm start > /tmp/manabi-hub.log 2>&1 &) → http://localhost:3939
+```
+以後の起動用に `~/.claude/skills/manabi-hub/SKILL.md`（起動スキル）を
+manabi-hubリポジトリ内の `docs/launcher-skill.md` からコピーして作成する。
+
+Noの場合（またはNode.jsがない場合）:
+閲覧はbundle_to_html.pyの単一HTML書き出しで代替できる（依存ゼロ）。
 
 ### Phase A: Course-Bundle 作成
 
@@ -466,7 +483,7 @@ python ~/.claude/skills/manabi-ingest/scripts/bundle_to_html.py "/path/to/course
 # → bundle直下に manual_viewer.html を生成
 ```
 
-- **役割分担**: MDは資産（原文・再抽出可能・Git管理）、HTMLは人間用ビューア（認知負荷対策）
+- **役割分担**: MDは資産（原文・再抽出可能・Git管理）、HTMLは人間用ビューア（認知負荷対策）。manabi-hubセットアップ済みならブラウザでlocalhost:3939を開くだけでよい（再生成不要）。HTMLビューアは配布・共有用
 - 表示ソースの優先順位: manual.md > article.md > transcript.txt（章ごとに自動選択）
 - knowledge.jsonがあれば章冒頭に「💡この章の概念」折りたたみパネルを自動挿入
 - 章ごと切り替え表示（左目次クリック / ←→キー / 前後章ボタン）
