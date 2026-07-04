@@ -18,6 +18,32 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 
 ## HOW
 
+### Phase 0: 学びホーム（ライブラリ）
+
+全ての取り込み成果物は**学びホーム**に集約する（作業はプロジェクト、資産はホーム）。
+
+- ホームの場所は `~/.claude/manabi-home`（1行のパスファイル）が指す
+- **このファイルが無ければ初回**。以下を実行してから本処理に進む:
+
+```
+📚 学びライブラリをどこに作りますか？
+   デフォルト: ~/ManabiLibrary
+   → ここでいいですか？（一度決めたら以降は聞きません）
+```
+
+```bash
+mkdir -p <ホーム>/bundles <ホーム>/.index
+echo '<ホーム>' > ~/.claude/manabi-home
+# config.json（名前・作成日）も作る
+```
+
+- 出力先のデフォルトは `<ホーム>/bundles/<教材名>/`（Step 1の確認は従来どおり行う）
+- 既存マニュアル・バンドルの移行: `scripts/migrate_to_library.py` を使う
+  - 新形式はそのまま移動、旧形式（manuals/*.md）はmanifest生成のみで中身無加工
+  - 同一講座のbundle+manualペアは `--pair-into` でbundle内source_media/に同居させ1講座1エントリを保つ
+- 閲覧: **manabi-hub**（localhost:3939のダッシュボード。bundles/を毎回スキャンするので置くだけで反映）
+  / 配布用は `scripts/bundle_to_html.py` で単一HTML書き出し
+
 ### Phase A: Course-Bundle 作成
 
 #### Step 0: 入力タイプの判定
@@ -58,7 +84,7 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 入力: [判定した入力タイプと内容]
 
 📁 出力先フォルダ（必ず確認する）:
-   デフォルト: [カレントディレクトリ]/[教材名]_bundle/
+   デフォルト: [学びホーム]/bundles/[教材名]/
    → ここでいいですか？変更する場合はパスを指定してください
 
 📋 講座について教えてください（わかる範囲で）
@@ -180,50 +206,10 @@ description: "動画講座やドキュメントを標準フォーマット（cou
 2. **ペイウォール確認（BLOCKER）**: 本文中に「この続きをみるには」「購入手続きへ」があれば
    **未購入のため取得不可**と報告して停止。回避は絶対に試みない。
    購入済み判定: ページ内の「購入済」表示、または本文末尾がフッター（ハッシュタグ・チップ欄）まで到達していること
-3. 本文コンテナ `.note-common-styles__textnote-body` から以下のJSで抽出
-   （**注意**: `article`セレクタは祖先要素を掴むので使わない）:
-
-```javascript
-() => {
-  const body = document.querySelector('.note-common-styles__textnote-body');
-  const els = body.querySelectorAll('h2,h3,h4,p,figure,ul,ol,blockquote,pre,hr,iframe');
-  let md = '';
-  for (const node of els) {
-    const anc = node.parentElement.closest('figure,blockquote,ul,ol,pre');
-    if (anc && body.contains(anc)) continue;  // 入れ子の二重取り防止
-    const tag = node.tagName.toLowerCase();
-    const txt = node.innerText ? node.innerText.trim() : '';
-    if (tag === 'h2') md += `\n<<H2>>${txt}\n`;
-    else if (tag === 'h3') md += `\n### ${txt}\n\n`;
-    else if (tag === 'h4') md += `\n#### ${txt}\n\n`;
-    else if (tag === 'iframe') {
-      // 埋め込み動画の検知（欠落させない）
-      if (/youtube|youtu\.be|vimeo|loom/.test(node.src))
-        md += `\n<<VIDEO>>${node.src}<<VTITLE>>${node.title || ''}\n`;
-    }
-    else if (tag === 'figure') {
-      const img = node.querySelector('img');
-      const cap = node.querySelector('figcaption');
-      if (img && img.src.includes('assets.st-note.com'))
-        md += `\n<<IMG>>${img.src}<<CAP>>${cap ? cap.innerText.trim() : ''}\n`;
-      else if (txt) md += '\n' + txt.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
-    }
-    else if (tag === 'ul') md += '\n' + Array.from(node.querySelectorAll(':scope > li')).map(li => `- ${li.innerText.trim()}`).join('\n') + '\n\n';
-    else if (tag === 'ol') md += '\n' + Array.from(node.querySelectorAll(':scope > li')).map((li,i) => `${i+1}. ${li.innerText.trim()}`).join('\n') + '\n\n';
-    else if (tag === 'blockquote') md += '\n' + txt.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
-    else if (tag === 'hr') md += '\n---\n\n';
-    else if (tag === 'pre') md += '\n```\n' + txt + '\n```\n\n';
-    else if (txt) md += txt + '\n\n';
-  }
-  return JSON.stringify({
-    url: location.href,
-    title: document.querySelector('h1').innerText.trim(),
-    author: '(著者名)',
-    purchased: !!document.body.innerText.match(/購入済/),
-    raw_markdown: md
-  });
-}
-```
+3. 本文を抽出する。抽出JSは **`scripts/note_extract.js`** をReadして、その関数を
+   そのままevaluate_scriptに渡す（SKILL.mdにはコードを書かない。修正はjsファイル側で行う）
+   - マーカー仕様: `<<H2>>`章見出し / `<<IMG>>url<<CAP>>caption` / `<<VIDEO>>url<<VTITLE>>title`
+   - **注意**: 本文コンテナは`.note-common-styles__textnote-body`。`article`セレクタは祖先要素を掴むので使わない
 
 4. 抽出JSONを `note_to_bundle.py` でcourse-bundle化:
 ```bash
@@ -233,7 +219,7 @@ python ~/.claude/skills/manabi-ingest/scripts/note_to_bundle.py raw.json "/path/
    - 記事内画像を各章の `screenshots/` にDL
    - 本文中のリンク・裸URLを `links.json` に記録（特典・配布物の検知用）
 
-5. **埋め込み動画の確認（BLOCKER）**: 変換結果に動画があれば、必ずユーザーに提示:
+5. **埋め込み動画の確認（BLOCKER）**（⚠️ hybrid章の取り込みは未検証ルート: 初回実行時はサンプルレビューを厚めに）: 変換結果に動画があれば、必ずユーザーに提示:
 ```
 ⚠️ 記事内に動画がN本見つかりました
   ch02: 解説動画（YouTube・12分）
@@ -255,7 +241,7 @@ python ~/.claude/skills/manabi-ingest/scripts/note_to_bundle.py raw.json "/path/
 
 7. Step 4（バリデーション）へ（note_to_bundle.pyが正規化まで行うためStep 3は不要）
 
-##### noteマガジン URL の場合
+##### noteマガジン URL の場合（⚠️ 未検証ルート: 初回実行時はサンプルレビューを厚めに）
 
 1. Chromeでマガジンページを開き、記事一覧（タイトル・URL・有料/無料）を取得
 2. 記事一覧を章一覧としてユーザーに提示し、処理対象を選択してもらう（動画講座の章選択と同じUI）

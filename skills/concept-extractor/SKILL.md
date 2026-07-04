@@ -179,10 +179,7 @@ manifest.jsonからコース名と章リストを取得する。
 #### Step 5: knowledge-graph.json生成
 
 **BLOCKER: 全章のknowledge.json生成完了後に実行すること。1章だけ見て全体グラフを作ってはならない。**
-
-**並列実行時のBLOCKER**: このStepは章担当の並列Agentには実行させない。
-**全Agent完了後にメインセッション（または専用Agent1体）が1回だけ**実行する。
-並列Agentが各自グラフを書くと部分グラフの上書き合戦になる。
+並列実行時の実行者ルール（誰が・いつ集約するか）の正本は **manabi-ingestの「章内完結ルール」** を参照。
 
 全章のknowledge.jsonを統合し:
 

@@ -35,6 +35,26 @@
       "type": "array",
       "items": { "$ref": "#/$defs/cross_reference_item" },
       "description": "他章への参照リスト"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["article", "video", "hybrid"],
+      "description": "章の一次ソース種別。article=記事原文（引用の信頼度最高）、video=Whisper文字起こし（誤認識の可能性あり）"
+    },
+    "key_quotes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/chapter_quote" },
+      "description": "章レベルの重要引用（概念に紐付かないもの）"
+    },
+    "resource_references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resource_reference_item" },
+      "description": "外部リソースへの言及"
+    },
+    "unresolved": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unresolved_item" },
+      "description": "未処理素材の明示記録（静かな欠落の禁止）。例: 取り込まなかった埋め込み動画"
     }
   },
   "$defs": {
@@ -86,7 +106,47 @@
             "pattern": "^c[0-9]{2}-[0-9]{2}$"
           },
           "description": "関連する概念のIDリスト"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["article", "video"],
+          "description": "この概念の抽出元（hybrid章で記事由来か動画由来かを区別）"
+        },
+        "visual_refs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "この概念を図解している画像ファイル名。visual-index.jsonのillustratesと双方向リンク",
+          "examples": [["img_002.png"]]
         }
+      }
+    },
+    "chapter_quote": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^q[0-9]{2}-[0-9]{2}$" },
+        "text": { "type": "string", "description": "原文ママ。要約・意訳は禁止" },
+        "context": { "type": "string", "description": "発言の文脈" }
+      }
+    },
+    "resource_reference_item": {
+      "type": "object",
+      "required": ["id", "text", "type"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^rr[0-9]{2}-[0-9]{2}$" },
+        "text": { "type": "string", "description": "リソース言及の原文" },
+        "type": { "type": "string", "description": "notion_page / pdf / template / url / melmaga / sns 等" },
+        "context": { "type": "string" },
+        "url_if_detected": { "type": ["string", "null"] }
+      }
+    },
+    "unresolved_item": {
+      "type": "object",
+      "required": ["type", "note"],
+      "properties": {
+        "type": { "type": "string", "description": "unprocessed_video / missing_resource 等" },
+        "url": { "type": ["string", "null"] },
+        "note": { "type": "string", "description": "何が未処理か・なぜか" }
       }
     },
     "key_quote": {
