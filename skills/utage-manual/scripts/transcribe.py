@@ -202,6 +202,13 @@ def transcribe_chunk(
                         return resp.json()
                     return resp.text.strip()
 
+                if resp.status_code in (401, 403):
+                    # 認証エラーはリトライ無意味。静かな欠落にせず即死させる
+                    raise SystemExit(
+                        f"FATAL: Groq APIキーが無効です (HTTP {resp.status_code})。"
+                        f" .env の GROQ_API_KEY を更新してください: {resp.text[:150]}"
+                    )
+
                 if resp.status_code == 429:
                     wait = min(30, 2 ** attempt)
                     print(f"Rate limit, waiting {wait}s...")
@@ -213,12 +220,15 @@ def transcribe_chunk(
                 else:
                     print(f"API error {resp.status_code}: {resp.text[:200]}")
 
+        except SystemExit:
+            raise
         except Exception as e:
             print(f"Request failed (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
 
-    return {} if response_format == "verbose_json" else ""
+    # 全リトライ失敗。空文字を返すと呼び出し側が「成功」扱いするため例外にする
+    raise RuntimeError(f"チャンク文字起こしが{max_retries}回とも失敗: {chunk_path.name}")
 
 
 def transcribe_audio(
@@ -310,17 +320,31 @@ def transcribe_audio(
                 for i, chunk in enumerate(chunks)
             }
 
+            failed_chunks = []
             for future in as_completed(futures):
                 try:
                     idx, result = future.result()
                     results[idx] = result
                     completed += 1
                     print(f"Completed {completed}/{total_chunks}")
+                except SystemExit as e:
+                    # 認証エラー等の致命傷は全体を即中断
+                    for f in futures:
+                        f.cancel()
+                    raise
                 except Exception as e:
                     idx = futures[future]
                     results[idx] = "" if not want_timestamps else {}
                     completed += 1
+                    failed_chunks.append(idx)
                     print(f"Chunk {idx} failed: {e}")
+
+        if failed_chunks:
+            # 一部チャンク欠落のまま「成功」と報告しない（静かな欠落の禁止）
+            sys.exit(
+                f"FAILED: {len(failed_chunks)}/{total_chunks} チャンクが失敗 "
+                f"(chunk {sorted(failed_chunks)})。出力は書き込みません。再実行してください。"
+            )
 
         if want_timestamps:
             # verbose_json: テキスト結合 + タイムスタンプJSON生成
