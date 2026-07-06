@@ -211,6 +211,10 @@ Noの場合（またはNode.jsがない場合）:
 | 汎用Web記事 | 不定 → フォールバック手順 | — | — |
 
 **Brainの追加知見**（2026-07実証）:
+- **リンクカードを見逃すな**: Brainは外部リンク（GoogleDoc配布物・PDF等）を`<a>`でなく
+  `[class*="_link_card_wrapper_"]`のDIVウィジェットで描画する。抽出時に必ず
+  `body.querySelectorAll('[class*="_link_card_wrapper_"]')` からURLを収集してlinks.jsonに含めること。
+  **配布プロンプト等の重要リソースがここにある**（実例: 「購入後最初に投げるプロンプト」はリンクカードのGoogleDocだった）
 - 埋め込みYouTube動画はiframeではなく `img.youtube.com` のサムネイル（`_container_nf4xe_*`）として
   レンダリングされる → サムネのsrcから動画ID（`/vi/<id>/`）を抽出して`<<VIDEO>>`マーカー化する
 - 画像は `image.brain-market.com` ドメインで判定（それ以外のimgはUI部品・拡張機能の混入）
